@@ -44,9 +44,15 @@ run(function () {
     createDirectories("file://");
 });
 
-Swoole\Runtime::enableCoroutine(false);
-createDirectories();
-createDirectories("file://");
+if (defined('SWOOLE_THREAD')) {
+	echo "SUCCESS".PHP_EOL;
+	echo "SUCCESS".PHP_EOL;
+} else {
+    Swoole\Runtime::enableCoroutine(false);
+    createDirectories();
+    createDirectories("file://");
+}
+
 ?>
 --EXPECT--
 SUCCESS

@@ -15,12 +15,12 @@ use  Swoole\Thread\Lock;
 const SIZE = 2 * 1024 * 1024;
 
 $tm = new \SwooleTest\ThreadManager();
-$tm->initFreePorts();
+$tm->initFreePorts(increment: crc32(__FILE__) % 1000);
 
 $tm->parentFunc = function () use ($tm) {
     $queue = new Swoole\Thread\Queue();
     $atomic = new Swoole\Thread\Atomic(1);
-    $thread = Thread::exec(__FILE__, $queue, $atomic);
+    $thread = new Thread(__FILE__, $queue, $atomic);
     echo $queue->pop(-1);
     Co\run(function () use ($tm) {
         $cli = new Co\Client(SWOOLE_SOCK_TCP);

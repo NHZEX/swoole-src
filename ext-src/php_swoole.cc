@@ -16,6 +16,7 @@
 #include "php_swoole_cxx.h"
 #include "php_swoole_library.h"
 #include "php_swoole_process.h"
+#include "php_swoole_thread.h"
 
 #if (HAVE_PCRE || HAVE_BUNDLED_PCRE) && !defined(COMPILE_DL_PCRE)
 #include "ext/pcre/php_pcre.h"
@@ -87,6 +88,7 @@ static PHP_FUNCTION(swoole_mime_type_list);
 static PHP_FUNCTION(swoole_substr_unserialize);
 static PHP_FUNCTION(swoole_substr_json_decode);
 static PHP_FUNCTION(swoole_internal_call_user_shutdown_begin);
+static PHP_FUNCTION(swoole_test_fn);  // only for unit tests
 SW_EXTERN_C_END
 
 // clang-format off
@@ -125,6 +127,7 @@ const zend_function_entry swoole_functions[] = {
     PHP_FE(swoole_clear_dns_cache,    arginfo_swoole_clear_dns_cache)
     PHP_FE(swoole_substr_unserialize, arginfo_swoole_substr_unserialize)
     PHP_FE(swoole_substr_json_decode, arginfo_swoole_substr_json_decode)
+    PHP_FE(swoole_test_fn,            arginfo_swoole_test_fn)
     PHP_FE(swoole_internal_call_user_shutdown_begin, arginfo_swoole_internal_call_user_shutdown_begin)
     // for admin server
     ZEND_FE(swoole_get_objects,          arginfo_swoole_get_objects)
@@ -177,6 +180,9 @@ zend_class_entry *swoole_error_ce;
 zend_object_handlers swoole_error_handlers;
 
 #ifdef COMPILE_DL_SWOOLE
+#ifdef ZTS
+ZEND_TSRMLS_CACHE_DEFINE()
+#endif
 ZEND_GET_MODULE(swoole)
 #endif
 
@@ -356,8 +362,14 @@ static void fatal_error(int code, const char *format, ...) {
         zend_throw_exception(swoole_error_ce, swoole::std_string::vformat(format, args).c_str(), code);
     va_end(args);
 
-    zend_exception_error(exception, E_ERROR);
-    exit(255);
+    zend::print_error(exception, E_ERROR);
+
+#ifdef SW_THREAD
+    if (!tsrm_is_main_thread()) {
+        php_swoole_thread_bailout();
+    }
+#endif
+    swoole_exit(255);
 }
 
 static void bug_report_message_init() {
@@ -516,6 +528,9 @@ PHP_MINIT_FUNCTION(swoole) {
     SW_REGISTER_LONG_CONSTANT("SWOOLE_ERROR_PROTOCOL_ERROR", SW_ERROR_PROTOCOL_ERROR);
     SW_REGISTER_LONG_CONSTANT("SWOOLE_ERROR_WRONG_OPERATION", SW_ERROR_WRONG_OPERATION);
     SW_REGISTER_LONG_CONSTANT("SWOOLE_ERROR_PHP_RUNTIME_NOTICE", SW_ERROR_PHP_RUNTIME_NOTICE);
+    SW_REGISTER_LONG_CONSTANT("SWOOLE_ERROR_FOR_TEST", SW_ERROR_FOR_TEST);
+    SW_REGISTER_LONG_CONSTANT("SWOOLE_ERROR_UNDEFINED_BEHAVIOR", SW_ERROR_UNDEFINED_BEHAVIOR);
+    SW_REGISTER_LONG_CONSTANT("SWOOLE_ERROR_NOT_THREAD_SAFETY", SW_ERROR_NOT_THREAD_SAFETY);
     SW_REGISTER_LONG_CONSTANT("SWOOLE_ERROR_FILE_NOT_EXIST", SW_ERROR_FILE_NOT_EXIST);
     SW_REGISTER_LONG_CONSTANT("SWOOLE_ERROR_FILE_TOO_LARGE", SW_ERROR_FILE_TOO_LARGE);
     SW_REGISTER_LONG_CONSTANT("SWOOLE_ERROR_FILE_EMPTY", SW_ERROR_FILE_EMPTY);
@@ -751,6 +766,7 @@ PHP_MINIT_FUNCTION(swoole) {
     php_swoole_thread_minit(module_number);
     php_swoole_thread_atomic_minit(module_number);
     php_swoole_thread_lock_minit(module_number);
+    php_swoole_thread_barrier_minit(module_number);
     php_swoole_thread_queue_minit(module_number);
     php_swoole_thread_map_minit(module_number);
     php_swoole_thread_arraylist_minit(module_number);
@@ -1077,8 +1093,7 @@ PHP_RSHUTDOWN_FUNCTION(swoole) {
         if (!zstream) {
             return;
         }
-        stream =
-            (php_stream *) zend_fetch_resource2_ex((zstream), "stream", php_file_le_stream(), php_file_le_pstream());
+        stream = (php_stream *) zend_fetch_resource2_ex((zstream), NULL, php_file_le_stream(), php_file_le_pstream());
         if (!stream) {
             return;
         }
@@ -1452,4 +1467,17 @@ static PHP_FUNCTION(swoole_substr_json_decode) {
         }
     }
     zend::json_decode(return_value, str + offset, length, options, depth);
+}
+
+static PHP_FUNCTION(swoole_test_fn) {
+    char *test_case;
+    size_t test_case_len;
+    ZEND_PARSE_PARAMETERS_START(1, 1)
+    Z_PARAM_STRING(test_case, test_case_len)
+    ZEND_PARSE_PARAMETERS_END();
+
+    if (SW_STRCASEEQ(test_case, test_case_len, "fatal_error")) {
+        swoole_fatal_error(SW_ERROR_FOR_TEST, "test");
+        php_printf("never be executed here\n");
+    }
 }

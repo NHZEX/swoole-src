@@ -43,6 +43,7 @@ void Coroutine::activate() {
     coroutine::thread_context_init();
 #endif
     activated = true;
+    on_bailout = nullptr;
 }
 
 void Coroutine::deactivate() {
@@ -50,6 +51,12 @@ void Coroutine::deactivate() {
     coroutine::thread_context_clean();
 #endif
     activated = false;
+    on_bailout = [](){
+        // The coroutine scheduler has been destroyed,
+        // Can not resume any coroutine
+        // Expect that never here
+        swoole_error("have been bailout, can not resume any coroutine");
+    };
 }
 
 void Coroutine::yield() {

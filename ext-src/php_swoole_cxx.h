@@ -127,6 +127,7 @@ extern zend_string **sw_zend_known_strings;
 SW_API bool php_swoole_is_enable_coroutine();
 SW_API zend_object *php_swoole_create_socket(enum swSocketType type);
 SW_API zend_object *php_swoole_create_socket_from_fd(int fd, enum swSocketType type);
+SW_API zend_object *php_swoole_create_socket_from_fd(int fd, int _domain, int _type, int _protocol);
 SW_API bool php_swoole_export_socket(zval *zobject, swoole::coroutine::Socket *_socket);
 SW_API zend_object *php_swoole_dup_socket(int fd, enum swSocketType type);
 SW_API void php_swoole_init_socket_object(zval *zobject, swoole::coroutine::Socket *socket);
@@ -672,6 +673,13 @@ static inline void object_set(zval *obj, const char *name, size_t l_name, const 
 static inline zval *object_get(zval *obj, const char *name, size_t l_name) {
     static zval rv;
     return zend_read_property(Z_OBJCE_P(obj), Z_OBJ_P(obj), name, l_name, 1, &rv);
+}
+
+/**
+ * print exception, The virtual machine will not be terminated.
+ */
+static inline void print_error(zend_object *exception, int severity) {
+    zend_exception_error(exception, severity);
 }
 
 //-----------------------------------namespace end--------------------------------------------
