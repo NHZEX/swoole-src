@@ -25,6 +25,7 @@ BEGIN_EXTERN_C()
 
 #include "ext/pcre/php_pcre.h"
 #include "ext/json/php_json.h"
+#include "php_open_temporary_file.h"
 
 #include "stubs/php_swoole_arginfo.h"
 #include "stubs/php_swoole_ex_arginfo.h"
@@ -845,6 +846,7 @@ PHP_MINIT_FUNCTION(swoole) {
     }
 
     swoole_init();
+    swoole_set_task_tmpdir(php_get_temporary_directory());
 
     // init bug report message
     bug_report_message_init();
